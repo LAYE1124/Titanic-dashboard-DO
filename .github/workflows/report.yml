@@ -1,0 +1,53 @@
+# =============================================================================
+# GitHub Actions - Generation du rapport ydata-profiling
+# =============================================================================
+# Workflow separe pour generer le rapport de profiling du dataset
+# et le publier comme artefact.
+# =============================================================================
+
+name: Generate Profiling Report
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version du rapport"
+        required: false
+        default: "v1.0"
+
+jobs:
+  generate:
+    name: Generation du rapport
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install pandas seaborn ydata-profiling
+
+      - name: Generate report
+        run: |
+          python -c "
+          import seaborn as sns
+          from ydata_profiling import ProfileReport
+
+          df = sns.load_dataset('titanic')
+          profile = ProfileReport(df, title='Titanic Dataset Report', minimal=True)
+          profile.to_file('titanic-report-${{ github.event.inputs.version }}.html')
+          print('Report generated successfully')
+          "
+
+      - name: Upload report
+        uses: actions/upload-artifact@v4
+        with:
+          name: titanic-report-${{ github.event.inputs.version }}
+          path: titanic-report-${{ github.event.inputs.version }}.html
+          retention-days: 90

@@ -1,0 +1,121 @@
+# =============================================================================
+# Docker Compose - Titanic Dashboard + ELK Stack
+# =============================================================================
+# Architecture complète :
+#   - titanic-app : Application Streamlit (port 8501)
+#   - elasticsearch : Base de donnees de recherche (port 9200)
+#   - logstash : Pipeline de traitement des logs (port 5044)
+#   - kibana : Visualisation des logs (port 5601)
+#   - filebeat : Collecteur de logs vers Logstash
+# =============================================================================
+
+version: "3.8"
+
+services:
+  # ---------------------------------------------------------------------------
+  # Application Streamlit Titanic Dashboard
+  # ---------------------------------------------------------------------------
+  titanic-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: titanic-dashboard
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./app.log:/app/app.log
+    networks:
+      - titanic-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ---------------------------------------------------------------------------
+  # Elasticsearch - Stockage et indexation des logs
+  # ---------------------------------------------------------------------------
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.12.0
+    container_name: titanic-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    volumes:
+      - es-data:/usr/share/elasticsearch/data
+    networks:
+      - titanic-network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 20s
+      timeout: 10s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # Logstash - Pipeline de traitement des logs JSON
+  # ---------------------------------------------------------------------------
+  logstash:
+    image: docker.elastic.co/logstash/logstash:8.12.0
+    container_name: titanic-logstash
+    volumes:
+      - ./logstash/pipeline/logstash.conf:/usr/share/logstash/pipeline/logstash.conf:ro
+      - ./app.log:/usr/share/logstash/input/app.log:ro
+    environment:
+      - "LS_JAVA_OPTS=-Xms256m -Xmx256m"
+      - XPACK_MONITORING_ENABLED=false
+    ports:
+      - "5044:5044"
+    networks:
+      - titanic-network
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+
+  # ---------------------------------------------------------------------------
+  # Kibana - Visualisation et dashboard des logs
+  # ---------------------------------------------------------------------------
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.12.0
+    container_name: titanic-kibana
+    ports:
+      - "5601:5601"
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    networks:
+      - titanic-network
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+
+  # ---------------------------------------------------------------------------
+  # Filebeat - Collecteur de logs vers Logstash
+  # ---------------------------------------------------------------------------
+  filebeat:
+    image: docker.elastic.co/beats/filebeat:8.12.0
+    container_name: titanic-filebeat
+    volumes:
+      - ./filebeat/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - ./app.log:/usr/share/filebeat/input/app.log:ro
+    networks:
+      - titanic-network
+    depends_on:
+      logstash:
+        condition: service_started
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  es-data:
+    driver: local
+
+# =============================================================================
+# Reseau
+# =============================================================================
+networks:
+  titanic-network:
+    driver: bridge

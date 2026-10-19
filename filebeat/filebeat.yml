@@ -1,0 +1,35 @@
+# =============================================================================
+# Filebeat Configuration - Collecteur de logs pour le Dashboard Titanic
+# =============================================================================
+# Filebeat lit le fichier app.log (format JSON) et envoie les entrees
+# vers Logstash pour traitement et indexation dans Elasticsearch.
+# =============================================================================
+
+filebeat.inputs:
+  - type: log
+    enabled: true
+    paths:
+      - /usr/share/filebeat/input/app.log
+    json.keys_under_root: true
+    json.add_error_key: true
+    json.message_key: message
+
+# Configuration du module pour le decodage JSON
+processors:
+  - add_host_metadata:
+      when.not.contains.tags: forwarded
+  - add_cloud_metadata: ~
+
+# Sortie vers Logstash
+output.logstash:
+  hosts: ["logstash:5044"]
+  bulk_max_size: 1024
+
+# Logging interne de Filebeat
+logging.level: info
+logging.to_files: true
+logging.files:
+  path: /var/log/filebeat
+  name: filebeat
+  keepfiles: 7
+  permissions: 0640
