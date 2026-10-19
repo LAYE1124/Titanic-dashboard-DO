@@ -169,7 +169,7 @@ profile.to_file('report.html')
 
 ## Auteur
 
-Projet realise dans le cadre du module DevOps - Filiere Data/IA
+Matar SENE - Filiere Data/IA
 
 ## Licence
 
